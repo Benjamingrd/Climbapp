@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Climb App</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f2f2f2;
+  margin: 10px;
+}
+h1, h2 {
+  margin-top: 20px;
+}
+.card {
+  background: white;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+}
+input, select, button {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+button {
+  cursor: pointer;
+}
+canvas {
+  border: 2px solid #000;
+  max-width: 100%;
+}
+.climb-item {
+  cursor: pointer;
+}
+.climb-item:hover {
+  background: #eee;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🧗 Climb App</h1>
+
+<!-- ADD WALL -->
+<h2>Add Wall</h2>
+<div class="card">
+  <input id="wallName" placeholder="Wall name">
+  <input type="file" id="wallImage" accept="image/*">
+  <button onclick="addWall()">Save Wall</button>
+</div>
+
+<!-- NEW CLIMB -->
+<h2>New Climb</h2>
+<div class="card">
+  <select id="wallSelect" onchange="loadWall()"></select>
+
+  <canvas id="canvas"></canvas>
+
+  <input id="grade" placeholder="Grade (ex: 6B, 7A)">
+  <button onclick="undoHold()">Undo last hold</button>
+  <button onclick="saveClimb()">Save Climb</button>
+</div>
+
+<!-- CLIMBS -->
+<h2>My Climbs</h2>
+<div id="climbList"></div>
+
+<script>
+let walls = JSON.parse(localStorage.getItem("walls")) || [];
+let climbs = JSON.parse(localStorage.getItem("climbs")) || [];
+
+let currentWall = null;
+let holds = [];
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// CLICK TO ADD HOLD
+canvas.addEventListener("click", e => {
+  if (!currentWall) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  holds.push({ x, y });
+  draw();
+});
+
+function addWall() {
+  const name = wallName.value;
+  const file = wallImage.files[0];
+  if (!name || !file) {
+    alert("Wall name and image required");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    walls.push({
+      id: Date.now(),
+      name,
+      image: reader.result
+    });
+    localStorage.setItem("walls", JSON.stringify(walls));
+    updateWallSelect();
+    alert("Wall saved");
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateWallSelect() {
+  wallSelect.innerHTML = `<option value="">Select wall</option>`;
+  walls.forEach(w => {
+    const opt = document.createElement("option");
+    opt.value = w.id;
+    opt.textContent = w.name;
+    wallSelect.appendChild(opt);
+  });
+}
+updateWallSelect();
+
+function loadWall() {
+  const id = wallSelect.value;
+  currentWall = walls.find(w => w.id == id);
+  holds = [];
+  draw();
+}
+
+function draw() {
+  if (!currentWall) return;
+
+  const img = new Image();
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+    holds.forEach(h => {
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, 10, 0, Math.PI * 2);
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    });
+  };
+  img.src = currentWall.image;
+}
+
+function undoHold() {
+  holds.pop();
+  draw();
+}
+
+function saveClimb() {
+  if (!currentWall) {
+    alert("Select a wall");
+    return;
+  }
+  if (!grade.value) {
+    alert("Enter a grade");
+    return;
+  }
+
+  climbs.push({
+    id: Date.now(),
+    wallId: currentWall.id,
+    grade: grade.value,
+    holds: JSON.parse(JSON.stringify(holds)),
+    date: new Date().toLocaleDateString()
+  });
+
+  localStorage.setItem("climbs", JSON.stringify(climbs));
+
+  holds = [];
+  grade.value = "";
+  draw();
+  drawClimbs();
+}
+
+function drawClimbs() {
+  climbList.innerHTML = "";
+
+  climbs.forEach(c => {
+    const wall = walls.find(w => w.id === c.wallId);
+    const div = document.createElement("div");
+    div.className = "card climb-item";
+
+    div.innerHTML = `
+      <strong>${wall ? wall.name : "Wall missing"}</strong><br>
+      Grade: ${c.grade}<br>
+      Date: ${c.date}<br>
+      <em>Click to view</em>
+    `;
+
+    div.onclick = () => {
+      currentWall = wall;
+      wallSelect.value = wall.id;
+      holds = c.holds;
+      draw();
+    };
+
+    climbList.appendChild(div);
+  });
+}
+drawClimbs();
+</script>
+
+</body>
+</html>
